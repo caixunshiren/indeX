@@ -5,3 +5,5 @@ Pillow
 matplotlib
 sentence-transformers
 transformers
+flask
+qdrant-client

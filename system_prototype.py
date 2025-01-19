@@ -12,12 +12,22 @@ from tqdm import tqdm
 load_dotenv()
 
 ########## API LOADING ##########
-# Get XAI API key from environment variables
-openai.api_key = os.getenv("XAI_API_KEY")
+# Get API key from environment variables
+API_PROVIDER = os.getenv("API_PROVIDER")
+if API_PROVIDER == "XAI":
+    openai.api_key = os.getenv("XAI_API_KEY")
+    base_url = "https://api.x.ai/v1"
+    vision_model = "grok-2-vision-1212"
+elif API_PROVIDER == "OPENAI":
+    openai.api_key = os.getenv("OPENAI_API_KEY")
+    base_url = None
+    vision_model = "gpt-4o-mini"
+else:
+    raise ValueError(f"Invalid API provider: {API_PROVIDER}")
 
 client = openai.OpenAI(
   api_key=openai.api_key,
-  base_url="https://api.x.ai/v1",
+  base_url=base_url,
 )
 #################################
 
@@ -81,7 +91,7 @@ def get_image_description(image_path):
 
     try:
         completion = client.chat.completions.create(
-            model="grok-2-vision-1212",
+            model=vision_model,
             messages=messages,
             temperature=0.01,  # Low temperature for more consistent outputs
             max_tokens=1000,   # Adjust based on needed description length
@@ -133,7 +143,7 @@ class ImageSearch:
 
 if __name__ == "__main__":
     random.seed(1221)
-    NUM_IMAGES = 20
+    NUM_IMAGES = 5
 
     # Load random images
     base_dir = "imagenet-mini"
@@ -162,7 +172,7 @@ if __name__ == "__main__":
     data = ImageSearch(selected_images, text_descriptions, text_embeddings)
     
     # Example search
-    results = data.search("show me an image of a bird", top_k=5)
+    results = data.search("show me an image of a bird", top_k=2)
     for result in results:
         print(f"Similarity: {result['similarity']:.3f}")
         print(f"Image: {result['image_path']}")

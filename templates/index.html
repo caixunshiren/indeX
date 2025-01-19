@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Image Search</title>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #000;
+            color: #fff;
+            line-height: 1.6;
+            padding: 20px;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+
+        .title-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 40px;
+        }
+
+        .static-text {
+            font-size: 2.5rem;
+            font-weight: 600;
+        }
+
+        .typing-text {
+            font-size: 2.5rem;
+            font-weight: 600;
+            border-right: 2px solid #fff;
+            white-space: nowrap;
+            overflow: hidden;
+            width: 0;
+            animation: 
+                typing 2.5s steps(13) forwards,  /* 13 characters in "Training Data" */
+                blink-caret 0.75s step-end infinite;
+        }
+
+        .blink-text {
+            font-size: 2.5rem;
+            font-weight: 600;
+            animation: blink 1s step-end infinite;
+        }
+
+        @keyframes typing {
+            from { width: 0 }
+            to { width: 12ch }  /* ch unit for character width */
+        }
+
+        @keyframes blink-caret {
+            from, to { border-color: transparent }
+            50% { border-color: #fff }
+        }
+
+        @keyframes blink {
+            from, to { opacity: 1 }
+            50% { opacity: 0 }
+        }
+
+        /* Add some spacing between elements */
+        .title-container > * {
+            margin: 0 2px;
+        }
+
+        #searchForm {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 40px;
+        }
+
+        input[type="text"] {
+            width: 100%;
+            max-width: 500px;
+            padding: 12px 20px;
+            border: 1px solid #333;
+            border-radius: 8px;
+            background-color: #111;
+            color: #fff;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+        }
+
+        input[type="text"]:focus {
+            outline: none;
+            border-color: #666;
+            background-color: #1a1a1a;
+        }
+
+        button {
+            padding: 12px 24px;
+            background: linear-gradient(90deg, #666, #444);
+            border: none;
+            border-radius: 8px;
+            color: #fff;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        button:hover {
+            background: linear-gradient(90deg, #777, #555);
+            transform: translateY(-1px);
+        }
+
+        #results {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 30px;
+            padding: 20px 0;
+        }
+
+        .result-card {
+            background-color: #111;
+            border-radius: 12px;
+            overflow: hidden;
+            transition: transform 0.3s ease;
+        }
+
+        .result-card:hover {
+            transform: translateY(-5px);
+        }
+
+        .result-image {
+            width: 100%;
+            height: 200px;
+            object-fit: cover;
+            border-bottom: 1px solid #222;
+            cursor: pointer;
+        }
+
+        .result-info {
+            padding: 20px;
+        }
+
+        .similarity-score {
+            color: #888;
+            font-size: 0.9rem;
+            margin-bottom: 10px;
+        }
+
+        .description {
+            color: #ccc;
+            font-size: 0.95rem;
+            line-height: 1.5;
+        }
+
+        /* Loading animation */
+        .loading {
+            text-align: center;
+            padding: 40px;
+            display: none;
+        }
+
+        .loading::after {
+            content: "Searching...";
+            color: #666;
+        }
+
+        .search-controls {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            max-width: 500px;
+            margin: 0 auto 40px;
+        }
+
+        .slider-container {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            color: #888;
+        }
+
+        .slider-label {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        input[type="range"] {
+            width: 100%;
+            height: 4px;
+            background: #333;
+            border-radius: 2px;
+            -webkit-appearance: none;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 20px;
+            height: 20px;
+            background: #666;
+            border-radius: 50%;
+            cursor: pointer;
+            transition: background 0.3s ease;
+        }
+
+        input[type="range"]::-webkit-slider-thumb:hover {
+            background: #777;
+        }
+
+        #resultCount {
+            font-size: 0.9rem;
+            color: #666;
+        }
+
+        /* Updated Modal styles */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.9);
+            z-index: 1000;
+            cursor: pointer;
+            padding: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-content {
+            position: relative;
+            width: 100%;
+            max-width: 1200px;
+            background: #000;
+            border-radius: 12px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .modal-content img {
+            max-width: 100%;
+            max-height: 80vh;
+            object-fit: contain;
+            display: block;
+            margin: auto;
+        }
+
+        .modal-info {
+            position: relative;
+            width: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 20px;
+            text-align: center;
+            margin-top: auto;
+        }
+
+        .image-path {
+            color: #666;
+            font-size: 0.8rem;
+            margin-top: 10px;
+            font-family: monospace;
+        }
+
+        .code-block {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+            padding: 8px 12px;
+            position: relative;
+            cursor: pointer;
+            display: inline-block;
+            min-width: 200px;
+            text-align: left;
+        }
+
+        .code-block:hover {
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        .code-block::after {
+            content: 'Copy';
+            position: absolute;
+            right: 8px;
+            color: #888;
+            font-size: 0.7rem;
+            font-family: 'Inter', sans-serif;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .code-block:hover::after {
+            opacity: 1;
+        }
+
+        .code-block.copied::after {
+            content: 'Copied!';
+            color: #4CAF50;
+        }
+
+        .close {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            color: #fff;
+            font-size: 30px;
+            font-weight: bold;
+            cursor: pointer;
+            z-index: 1001;
+            width: 40px;
+            height: 40px;
+            background: rgba(0, 0, 0, 0.5);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background-color 0.3s ease;
+        }
+
+        .close:hover {
+            background-color: rgba(0, 0, 0, 0.8);
+        }
+
+        .modal .similarity-score {
+            font-size: 1.1rem;
+            margin-bottom: 10px;
+            color: #888;
+        }
+
+        .modal .description {
+            font-size: 1rem;
+            line-height: 1.6;
+            color: #fff;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        /* Fix for modal display */
+        #imageModal {
+            display: none;
+        }
+
+        #imageModal.show {
+            display: flex !important;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="title-container">
+            <span class="static-text">indeX</span>
+            <span class="static-text">:</span>
+            <div style="position: relative; display: inline-block; margin: 0 10px;">
+                <span class="typing-text">Training Data</span>
+            </div>
+        </div>
+        <form id="searchForm">
+            <div class="search-controls">
+                <input type="text" id="query" placeholder="Describe what you're looking for...">
+                <div class="slider-container">
+                    <div class="slider-label">
+                        <span>Number of results</span>
+                        <span id="resultCount">10</span>
+                    </div>
+                    <input type="range" id="topK" min="1" max="51" value="10">
+                </div>
+                <button type="submit">Search</button>
+            </div>
+        </form>
+        <div class="loading"></div>
+        <div id="results"></div>
+    </div>
+
+    <!-- Add modal markup -->
+    <div id="imageModal" class="modal">
+        <span class="close">&times;</span>
+        <div class="modal-content">
+            <img id="modalImage" src="">
+            <div class="modal-info">
+                <div id="modalSimilarity" class="similarity-score"></div>
+                <div id="modalDescription" class="description"></div>
+                <div class="image-path">
+                    <div id="modalPath" class="code-block"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Update the result count display when slider moves
+        $('#topK').on('input', function() {
+            let value = $(this).val();
+            $('#resultCount').text(value >= 51 ? '50+' : value);
+        });
+
+        // Modal functionality
+        const modal = document.getElementById('imageModal');
+        const modalImg = document.getElementById('modalImage');
+        const modalSimilarity = document.getElementById('modalSimilarity');
+        const modalDescription = document.getElementById('modalDescription');
+        const closeBtn = document.getElementsByClassName('close')[0];
+
+        function showModal(imgSrc, similarity, description) {
+            modal.classList.add('show');
+            modalImg.src = imgSrc;
+            modalSimilarity.textContent = `Similarity: ${similarity}%`;
+            modalDescription.textContent = description;
+            const pathElement = document.getElementById('modalPath');
+            pathElement.textContent = imgSrc.split('/').slice(-2).join('/');
+            
+            // Add click-to-copy functionality
+            pathElement.onclick = async function() {
+                try {
+                    await navigator.clipboard.writeText(this.textContent);
+                    this.classList.add('copied');
+                    setTimeout(() => this.classList.remove('copied'), 2000);
+                } catch (err) {
+                    console.error('Failed to copy text: ', err);
+                }
+            };
+        }
+
+        // Close modal when clicking X or outside the image
+        closeBtn.onclick = function() {
+            modal.classList.remove('show');
+        }
+
+        modal.onclick = function(e) {
+            if (e.target === modal) {
+                modal.classList.remove('show');
+            }
+        }
+
+        // Close modal with escape key
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape' && modal.classList.contains('show')) {
+                modal.classList.remove('show');
+            }
+        });
+
+        $('#searchForm').submit(function(e) {
+            e.preventDefault();
+            $('.loading').show();
+            $('#results').empty();
+            
+            // Convert slider value to actual top_k value (use -1 or a very large number for unlimited)
+            let topK = $('#topK').val();
+            topK = topK >= 51 ? -1 : parseInt(topK);
+            
+            $.ajax({
+                url: '/search',
+                method: 'POST',
+                data: {
+                    query: $('#query').val(),
+                    top_k: topK
+                },
+                success: function(results) {
+                    $('.loading').hide();
+                    results.forEach(function(result) {
+                        const resultCard = $(`
+                            <div class="result-card">
+                                <img src="/static/images/${result.image_path}" 
+                                     class="result-image" 
+                                     onerror="this.onerror=null; this.src='/static/placeholder.png';">
+                                <div class="result-info">
+                                    <div class="similarity-score">Similarity: ${(result.similarity * 100).toFixed(1)}%</div>
+                                    <div class="description">${result.description}</div>
+                                </div>
+                            </div>
+                        `);
+                        
+                        // Add click handler to the image
+                        resultCard.find('.result-image').on('click', function() {
+                            showModal(
+                                this.src,
+                                (result.similarity * 100).toFixed(1),
+                                result.description
+                            );
+                        });
+                        
+                        $('#results').append(resultCard);
+                    });
+                },
+                error: function() {
+                    $('.loading').hide();
+                    $('#results').html('<p style="color: #ff4444; text-align: center;">An error occurred while searching. Please try again.</p>');
+                }
+            });
+        });
+    </script>
+</body>
+</html> 
