@@ -107,15 +107,45 @@ def home():
 
 @app.route('/search', methods=['POST'])
 def search():
-    query = request.form.get('query')
+    query = request.form.get('query', '')
     top_k = int(request.form.get('top_k', 5))
+    
+    # Handle multiple image uploads
+    image_descriptions = []
+    
+    # Look for files named image_0, image_1, etc.
+    image_index = 0
+    while f'image_{image_index}' in request.files:
+        image_file = request.files[f'image_{image_index}']
+        if image_file:
+            # Save temporarily
+            temp_path = os.path.join('temp', image_file.filename)
+            os.makedirs('temp', exist_ok=True)
+            image_file.save(temp_path)
+            
+            try:
+                # Get image description
+                image_description = get_image_description(temp_path)
+                image_descriptions.append(image_description)
+            finally:
+                # Clean up temp file
+                os.remove(temp_path)
+        
+        image_index += 1
+    
+    # Combine text query with all image descriptions
+    if image_descriptions:
+        descriptions_text = "\n".join(f"Image {i} description: {desc}" for i, desc in enumerate(image_descriptions))
+        query = f"{query}\n{descriptions_text}"
+    
+    print("[debug] got query:", query)
     
     # Get query embedding
     query_embedding = get_text_embeddings([query])[0]
     
-    # If top_k is -1 (unlimited), use a large number like 1000
+    # If top_k is -1 (unlimited), use a large number
     if top_k == -1:
-        top_k = 1000  # or any other large number that makes sense for your use case
+        top_k = 1000
     
     # Search in Qdrant
     results = qdrant_client.search(

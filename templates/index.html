@@ -353,6 +353,86 @@
         #imageModal.show {
             display: flex !important;
         }
+
+        .image-upload-container {
+            margin: 10px 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+        }
+
+        .image-upload-label {
+            display: inline-block;
+            padding: 8px 16px;
+            background: #333;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-bottom: 10px;
+        }
+
+        .image-upload-label:hover {
+            background: #444;
+        }
+
+        #imageInput {
+            display: none;
+        }
+
+        #imagePreview {
+            max-width: 200px;
+            margin-top: 10px;
+            display: flex;
+            justify-content: center;
+        }
+
+        #imagePreview img {
+            max-width: 100%;
+            border-radius: 4px;
+        }
+
+        .image-preview-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            justify-content: center;
+            margin-top: 10px;
+            max-width: 600px;
+        }
+
+        .preview-image-wrapper {
+            position: relative;
+            width: 150px;
+            height: 150px;
+        }
+
+        .preview-image-wrapper img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            border-radius: 4px;
+        }
+
+        .remove-image {
+            position: absolute;
+            top: -8px;
+            right: -8px;
+            width: 20px;
+            height: 20px;
+            background: #ff4444;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 14px;
+            cursor: pointer;
+            border: 2px solid #000;
+        }
+
+        .remove-image:hover {
+            background: #ff6666;
+        }
     </style>
 </head>
 <body>
@@ -367,6 +447,13 @@
         <form id="searchForm">
             <div class="search-controls">
                 <input type="text" id="query" placeholder="Describe what you're looking for...">
+                <div class="image-upload-container">
+                    <input type="file" id="imageInput" accept="image/*" multiple>
+                    <label for="imageInput" class="image-upload-label">
+                        Upload Images (Optional)
+                    </label>
+                    <div id="imagePreview" class="image-preview-container"></div>
+                </div>
                 <div class="slider-container">
                     <div class="slider-label">
                         <span>Number of results</span>
@@ -448,22 +535,64 @@
             }
         });
 
+        // Add image preview functionality
+        let uploadedFiles = new Map(); // Store File objects with unique IDs
+
+        $('#imageInput').change(function(e) {
+            const files = e.target.files;
+            for (let file of files) {
+                const fileId = Date.now() + Math.random(); // Generate unique ID
+                uploadedFiles.set(fileId, file);
+                
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const imageWrapper = $(`
+                        <div class="preview-image-wrapper" data-file-id="${fileId}">
+                            <img src="${e.target.result}">
+                            <div class="remove-image">×</div>
+                        </div>
+                    `);
+                    $('#imagePreview').append(imageWrapper);
+                }
+                reader.readAsDataURL(file);
+            }
+            // Clear the input to allow selecting the same files again
+            this.value = '';
+        });
+
+        // Handle remove image click
+        $(document).on('click', '.remove-image', function() {
+            const wrapper = $(this).parent();
+            const fileId = wrapper.data('file-id');
+            uploadedFiles.delete(fileId);
+            wrapper.remove();
+        });
+
         $('#searchForm').submit(function(e) {
             e.preventDefault();
             $('.loading').show();
             $('#results').empty();
             
-            // Convert slider value to actual top_k value (use -1 or a very large number for unlimited)
             let topK = $('#topK').val();
             topK = topK >= 51 ? -1 : parseInt(topK);
+            
+            const formData = new FormData();
+            formData.append('query', $('#query').val());
+            formData.append('top_k', topK);
+            
+            // Append all uploaded images
+            let imageIndex = 0;
+            for (let file of uploadedFiles.values()) {
+                formData.append(`image_${imageIndex}`, file);
+                imageIndex++;
+            }
             
             $.ajax({
                 url: '/search',
                 method: 'POST',
-                data: {
-                    query: $('#query').val(),
-                    top_k: topK
-                },
+                data: formData,
+                processData: false,
+                contentType: false,
                 success: function(results) {
                     $('.loading').hide();
                     results.forEach(function(result) {
