@@ -1,0 +1,7 @@
+kaggle
+openai
+python-dotenv
+Pillow
+matplotlib
+sentence-transformers
+transformers

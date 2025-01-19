@@ -1,0 +1,30 @@
+Provide a comprehensive and structured description of the image following these aspects:
+
+1. Main Subject: Identify and describe the primary subject(s) or focal point(s).
+
+2. Physical Attributes:
+   - Colors: Dominant and accent colors
+   - Shapes: Geometric forms and outlines
+   - Textures: Surface qualities and patterns
+   - Size: Relative proportions and scale
+   - Materials: Visible materials or substances
+
+3. Spatial Information:
+   - Location: Position of objects relative to each other
+   - Composition: Layout and arrangement
+   - Depth: Foreground, middle ground, and background elements
+   - Perspective: Viewing angle and distance
+
+4. Context and Details:
+   - Setting: Environment or background context
+   - Time: Time of day, season, or era if apparent
+   - Activity: Any actions or events taking place
+   - Text: Any visible writing or symbols
+   - Condition: State or quality of objects
+
+5. Technical Elements:
+   - Lighting: Light sources, shadows, and highlights
+   - Focus: Sharp or blurred areas
+   - Style: Artistic or photographic style
+
+Please describe these aspects in clear, detailed sentences that maintain semantic relationships between elements.
