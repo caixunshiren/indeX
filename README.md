@@ -19,11 +19,17 @@ XAI_API_KEY=YOUR_XAI_KEY
 OPENAI_API_KEY=YOUR_OPENAI_KEY
 ```
 
-### Quick Start with Sample Data
+### Quick Start with Sample Data with Separated Text and Image Models
 ```bash
 docker pull qdrant/qdrant
 docker run -p 6333:6333 qdrant/qdrant
 python app.py image-test
+```
+
+### Faster Search with Aligned Embeddings on ImageNet Mini
+
+```bash
+python app.py imagenet-mini --embedding_type aligned
 ```
 
 ### System Design

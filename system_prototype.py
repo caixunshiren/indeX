@@ -125,7 +125,7 @@ def get_multi_modal_embeddings(inputs, is_image=True, batch_size=16):
     all_features = []
     
     # Process in batches
-    for i in tqdm(range(0, len(inputs), batch_size)):
+    for i in range(0, len(inputs), batch_size):
         batch = inputs[i:i + batch_size]
         
         if is_image:

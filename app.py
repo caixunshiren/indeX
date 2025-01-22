@@ -17,17 +17,27 @@ IMAGE_DIR = None
 # Initialize Qdrant client
 qdrant_client = QdrantClient("localhost", port=6333)
 
-def init_collection():
+def init_collection(clean=False):
     """Initialize or get existing collection"""
     assert COLLECTION_NAME is not None, "Collection name is not set"
     assert VECTOR_SIZE is not None, "Vector size is not set"
+    
+    # Get list of collection names as strings
+    existing_collections = [col.name for col in qdrant_client.get_collections().collections]
+    print("Existing collections: ", existing_collections)
+    
+    if clean and COLLECTION_NAME in existing_collections:
+        print(f"Deleting existing collection '{COLLECTION_NAME}'...")
+        qdrant_client.delete_collection(collection_name=COLLECTION_NAME)
+    
     try:
         qdrant_client.create_collection(
             collection_name=COLLECTION_NAME,
             vectors_config=VectorParams(size=VECTOR_SIZE, distance=Distance.COSINE),
         )
-    except Exception:
-        # Collection already exists
+        print(f"Created new collection '{COLLECTION_NAME}'")
+    except Exception as e:
+        print(f"Collection '{COLLECTION_NAME}' already exists")
         pass
 
 def get_image_hash(image_path):
@@ -35,7 +45,7 @@ def get_image_hash(image_path):
     with open(image_path, 'rb') as f:
         return hashlib.md5(f.read()).hexdigest()
 
-def create_app(image_dir, embedding_type):
+def create_app(image_dir, embedding_type, clean=False):
     global IMAGE_DIR, COLLECTION_NAME, EMBEDDING_TYPE, VECTOR_SIZE
     # Use the directory name as collection name (sanitized)
     COLLECTION_NAME = os.path.basename(os.path.normpath(image_dir)) + '_' + embedding_type
@@ -48,7 +58,7 @@ def create_app(image_dir, embedding_type):
     # Create symbolic link to image directory in static folder
     static_images_dir = os.path.join('static', 'images')
     os.makedirs(static_images_dir, exist_ok=True)
-    symlink_path = os.path.join(static_images_dir, COLLECTION_NAME)
+    symlink_path = os.path.join(static_images_dir, IMAGE_DIR)
     
     # Remove existing symlink if it exists
     if os.path.exists(symlink_path):
@@ -58,13 +68,14 @@ def create_app(image_dir, embedding_type):
     os.symlink(os.path.abspath(image_dir), symlink_path)
     
     # Initialize collection and index images here instead of in main
-    init_collection()
+    init_collection(clean)
     index_images(image_dir)
     
     return app
 
 def index_images(image_dir):
     """Index all images in the directory if not already indexed"""
+    BATCH_SIZE = 128  # Adjust this number based on your average payload size
     image_paths = load_images_paths(image_dir)
     
     # Get existing image hashes from the collection
@@ -87,44 +98,50 @@ def index_images(image_dir):
     if new_images:
         print(f"Processing {len(new_images)} new images...")
         next_id = len(existing_hashes) + 1
-        paths = [img_path for img_path, _ in new_images]
         
-        if EMBEDDING_TYPE == "aligned":
-            # Get embeddings for all images at once using CLIP
-            embeddings = get_multi_modal_embeddings(paths, is_image=True)
-            descriptions = [""] * len(paths)  # Empty descriptions for aligned mode
-        else:
-            # Original separated mode - process one by one
-            embeddings = []
-            descriptions = []
-            for image_path, _ in tqdm(new_images):
-                try:
-                    description = get_image_description(image_path)
-                    embedding = get_text_embeddings([description])[0]
-                    embeddings.append(embedding)
-                    descriptions.append(description)
-                except Exception as e:
-                    print(f"Error processing {image_path}: {e}")
-                    continue
+        # Process in batches
+        print(f"Processing image embeddings...")
+        for batch_start in tqdm(range(0, len(new_images), BATCH_SIZE)):
+            batch_end = min(batch_start + BATCH_SIZE, len(new_images))
+            batch_images = new_images[batch_start:batch_end]
+            batch_paths = [img_path for img_path, _ in batch_images]
+                        
+            if EMBEDDING_TYPE == "aligned":
+                # Get embeddings for batch using CLIP
+                embeddings = get_multi_modal_embeddings(batch_paths, is_image=True)
+                descriptions = [""] * len(batch_paths)  # Empty descriptions for aligned mode
+            else:
+                # Original separated mode - process one by one
+                embeddings = []
+                descriptions = []
+                for image_path, _ in tqdm(batch_images):
+                    try:
+                        description = get_image_description(image_path)
+                        embedding = get_text_embeddings([description])[0]
+                        embeddings.append(embedding)
+                        descriptions.append(description)
+                    except Exception as e:
+                        print(f"Error processing {image_path}: {e}")
+                        continue
 
-        # Store in Qdrant
-        points = []
-        for i, ((image_path, image_hash), embedding, description) in enumerate(zip(new_images, embeddings, descriptions)):
-            points.append(PointStruct(
-                id=next_id + i,
-                vector=embedding.tolist(),
-                payload={
-                    'image_path': os.path.join(IMAGE_DIR, os.path.basename(image_path)),
-                    'description': description,
-                    'image_hash': image_hash
-                }
-            ))
-        
-        if points:
-            qdrant_client.upsert(
-                collection_name=COLLECTION_NAME,
-                points=points
-            )
+            # Store batch in Qdrant
+            points = []
+            for i, ((image_path, image_hash), embedding, description) in enumerate(zip(batch_images, embeddings, descriptions)):
+                points.append(PointStruct(
+                    id=next_id + batch_start + i,
+                    vector=embedding.tolist(),
+                    payload={
+                        'image_path': image_path,
+                        'description': description,
+                        'image_hash': image_hash
+                    }
+                ))
+            
+            if points:
+                qdrant_client.upsert(
+                    collection_name=COLLECTION_NAME,
+                    points=points
+                )
 
 @app.route('/')
 def home():
@@ -235,7 +252,10 @@ if __name__ == '__main__':
                        default='separated',
                        choices=['separated', 'aligned'],
                        help='Type of embedding to use: "separated" for separate text and image models, "aligned" for multimodal embedding')
+    parser.add_argument('--clean',
+                       action='store_true',
+                       help='Delete existing collection and start fresh')
     args = parser.parse_args()
     
-    app = create_app(args.image_dir, args.embedding_type)
+    app = create_app(args.image_dir, args.embedding_type, args.clean)
     app.run(debug=True) 
