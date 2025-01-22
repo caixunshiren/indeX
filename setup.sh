@@ -10,7 +10,7 @@ source venv/bin/activate
 pip install -r requirements.txt
 
 # Check if dataset directory exists
-if [ ! -d "imagenetmini-1000" ]; then
+if [ ! -d "imagenet-mini" ]; then
     echo "Downloading ImageNet Mini dataset..."
     kaggle datasets download ifigotin/imagenetmini-1000
     # Unzip the dataset

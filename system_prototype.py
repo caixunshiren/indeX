@@ -7,6 +7,8 @@ from PIL import Image
 from sentence_transformers import SentenceTransformer
 import numpy as np
 from tqdm import tqdm
+import torch
+from transformers import AutoImageProcessor, AutoModel, AutoTokenizer
 
 # Load environment variables from .env file
 load_dotenv()
@@ -39,6 +41,12 @@ with open("prompts/image_to_text_prompt_concise.txt", "r") as f:
 ########## EMBEDDING MODEL LOADING ##########
 embedding_model = SentenceTransformer("Alibaba-NLP/gte-Qwen2-1.5B-instruct", trust_remote_code=True)
 embedding_model.max_seq_length = 8192
+
+# Add CLIP model loading
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+clip_model = AutoModel.from_pretrained("openai/clip-vit-base-patch16").to(device)
+clip_processor = AutoImageProcessor.from_pretrained("openai/clip-vit-base-patch16", use_fast=True)
+clip_tokenizer = AutoTokenizer.from_pretrained("openai/clip-vit-base-patch16")
 #################################
 
 def load_images_paths(base_dir, format="JPEG"):
@@ -102,6 +110,41 @@ def get_image_description(image_path):
     
 def get_text_embeddings(text_descriptions):
     return embedding_model.encode(text_descriptions)
+
+def get_multi_modal_embeddings(inputs, is_image=True, batch_size=16):
+    """Get CLIP embeddings for either images or text.
+    
+    Args:
+        inputs: List of image paths (if is_image=True) or list of texts (if is_image=False)
+        is_image: Boolean flag to indicate if inputs are images
+        batch_size: Number of inputs to process at once
+    
+    Returns:
+        numpy array of embeddings
+    """
+    all_features = []
+    
+    # Process in batches
+    for i in tqdm(range(0, len(inputs), batch_size)):
+        batch = inputs[i:i + batch_size]
+        
+        if is_image:
+            # Process images
+            images = []
+            for path in batch:
+                image = Image.open(path)
+                images.append(image)
+            
+            batch_inputs = clip_processor(images=images, return_tensors="pt").to(device)
+            features = clip_model.get_image_features(**batch_inputs)
+        else:
+            # Process text
+            batch_inputs = clip_tokenizer(batch, padding=True, return_tensors="pt").to(device)
+            features = clip_model.get_text_features(**batch_inputs)
+        
+        all_features.append(features.detach().cpu().numpy())
+    
+    return np.concatenate(all_features, axis=0)
 
 class ImageSearch:
     def __init__(self, images: list, descriptions: list, embeddings: np.ndarray):
